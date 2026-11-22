@@ -60,7 +60,7 @@ struct PuzzleView: View {
                 PuzzleBoardLayout(wide: wide, expanded: expanded, boardHeight: boardHeight,
                                   spacing: wide ? 24 : (tabletLayout ? 16 : 22)) {
                     header.opacity(expanded ? 0 : 1).accessibilityHidden(expanded)
-                    levelHeading.opacity(expanded ? 0 : 1).accessibilityHidden(expanded)
+                    levelHeading(sidebar: wide).opacity(expanded ? 0 : 1).accessibilityHidden(expanded)
                     controls.opacity(expanded ? 0 : 1).accessibilityHidden(expanded)
                     board
                 }
@@ -137,29 +137,63 @@ struct PuzzleView: View {
         }
     }
 
-    private var levelHeading: some View {
-        HStack(alignment: .bottom, spacing: 10) {
+    private func levelHeading(sidebar: Bool) -> some View {
+        let layout = sidebar
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+            : AnyLayout(HStackLayout(alignment: .bottom, spacing: 12))
+        return layout {
             VStack(alignment: .leading, spacing: 6) {
                 Text("LEVEL \(engine.level.id.formatted(.number.precision(.integerLength(2)))) / \(levels.count.formatted(.number.precision(.integerLength(2))))")
                     .font(.system(.caption2, design: .monospaced, weight: .semibold))
                     .tracking(1.6)
                     .foregroundStyle(PuzzlePalette.accent)
+                    .fixedSize(horizontal: true, vertical: false)
                 Text(engine.level.name)
-                    .font(.system(.title2, weight: .medium))
+                    .font(.system(sidebar ? .title2 : .title3, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
             }
-            Spacer(minLength: 4)
-            boardButton("Map", icon: "map", showTitle: true, action: openMap)
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("TURNS")
-                    .font(.system(.caption2, design: .monospaced))
-                    .tracking(1.4)
-                    .foregroundStyle(PuzzlePalette.muted)
-                Text(engine.moves.formatted(.number.precision(.integerLength(2))))
-                    .font(.system(.headline, design: .monospaced).monospacedDigit())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                if sidebar {
+                    turnsCounter(stacked: false)
+                    Spacer(minLength: 8)
+                    mapButton
+                } else {
+                    mapButton
+                    turnsCounter(stacked: true)
+                }
             }
-            .accessibilityElement(children: .combine)
+            .padding(.top, sidebar ? 9 : 0)
+            .overlay(alignment: .top) {
+                if sidebar {
+                    Rectangle().fill(PuzzlePalette.border).frame(height: 1)
+                        .accessibilityHidden(true)
+                }
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var mapButton: some View {
+        boardButton("Map", icon: "map", showTitle: true, action: openMap)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func turnsCounter(stacked: Bool) -> some View {
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 6))
+        return layout {
+            Text("TURNS")
+                .font(.system(.caption2, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(PuzzlePalette.muted)
+            Text(engine.moves.formatted(.number.precision(.integerLength(2))))
+                .font(.system(.headline, design: .monospaced).monospacedDigit())
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .combine)
     }
 
     private var board: some View {
@@ -341,7 +375,9 @@ struct PuzzleView: View {
     }
 
     private var runInstructions: String {
-        if engine.level.showsOpeningRoute {
+        if engine.level.id >= 40 {
+            return "Orbit to compare the slopes before your first turn. Both tracks rejoin, but the core can only roll level or downhill."
+        } else if engine.level.showsOpeningRoute {
             return "Your first turn starts the core. Rotate an elbow to connect one route at a time."
         } else if engine.hasMovingStairs {
             return "Violet stairs swing on their own. Align the road they connect to, then time your crossing."

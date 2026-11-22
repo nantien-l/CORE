@@ -7,28 +7,29 @@ enum LayeredMazes {
         "Twin Rifts", "The Long Drop", "Fault Chamber", "Burning Orbit", "The Descent", "Apex Gate",
         "Stillpoint", "Parallel Landing", "Counterflow", "Pivot Hall", "Twin Descent", "Staggered Heights",
         "Twin Horizons", "The Quiet Tower", "Signal Court", "Reality Rejoined"
-    ].enumerated().map { make($0.offset + 25, name: $0.element) }
+    ].enumerated().map { $0.offset + 25 >= 40 ? ForkedMazes.foldedLevel($0.offset + 25, name: $0.element) : make($0.offset + 25, name: $0.element) }
 
     private struct Branch {
         let origin: Cell
         let cells: [Cell]
         let directions: [Direction]
         let startHeight: Int
-        let climbs: Bool
+        let climbIndex: Int?
 
         func height(at index: Int) -> Int {
-            if climbs && index == cells.count - 1 { return startHeight }
+            if let climbIndex, index >= climbIndex { return startHeight - (climbIndex - 1) / 3 }
             return startHeight - 1 - index / 3
         }
     }
 
     private static func make(_ id: Int, name: String) -> Level {
-        let width = 5 + id % 3
-        let depth = 3 + id % 2
-        let finishWidth = width + (id % 4 < 2 ? 0 : 1)
+        let compact = (30...40).contains(id)
+        let width = compact ? 4 + id % 2 : 5 + id % 3
+        let depth = (compact ? 2 : 3) + id % 2
+        let finishWidth = compact ? width - id % 2 : width + (id % 4 < 2 ? 0 : 1)
         var segments: [(Direction, Int)] = [
             (.east, width), (.south, depth), (.west, width - (id >= 41 ? id % 2 : 0)),
-            (.south, 3), (.east, id >= 41 ? finishWidth - 1 : finishWidth)
+            (.south, compact ? 2 : 3), (.east, id >= 41 ? finishWidth - 1 : finishWidth)
         ]
         if id >= 41 {
             segments += [(.south, 3 + id % 2), (.west, finishWidth - 1)]
@@ -47,7 +48,9 @@ enum LayeredMazes {
             let inward = [side, side, bend, bend, side.opposite, bend]
             let outward = [side, side, bend.opposite, bend.opposite, side, bend]
             let short = [[side, side, bend], [side, side, bend.opposite], [side, side, side], [side, side]]
-            let patterns = long ? [inward, outward, Array(inward.prefix(4)), Array(outward.prefix(4))] + short : short
+            let compactBends = [[side, bend, bend], [side, bend.opposite, bend.opposite]]
+            let patterns = long ? [inward, outward, Array(inward.prefix(4)), Array(outward.prefix(4))] + short
+                : (compact ? compactBends + short : short)
             for directions in patterns {
                 var cell = origin
                 let path = directions.map { direction in
@@ -57,26 +60,33 @@ enum LayeredMazes {
                 guard path.allSatisfy({ !occupied.contains($0) }) else { continue }
                 occupied.formUnion(path)
                 branches.append(Branch(origin: origin, cells: path, directions: directions,
-                                       startHeight: height, climbs: seed.isMultiple(of: 3)))
+                                       startHeight: height, climbIndex: seed.isMultiple(of: 3) ? path.count - 1 : nil))
                 break
             }
         }
 
         let bends = route.indices.dropFirst().filter { route[$0 - 1] != route[$0] }
-        let candidates = id >= 35 ? Array(bends) : bends.enumerated().filter { $0.offset != 1 }.map(\.element)
+        let candidates = id >= 30 ? Array(bends) : bends.enumerated().filter { $0.offset != 1 }.map(\.element)
+        func approach(_ fork: Int) -> [Cell] {
+            let side = route[fork].opposite
+            let first = cells[fork].neighbor(side)
+            return [first, first.neighbor(side)]
+        }
+        if id >= 40 { occupied.formUnion(candidates.flatMap(approach)) }
         for fork in candidates {
+            if id >= 40 { occupied.subtract(approach(fork)) }
             // The same two-port elbow can keep its entry and select either opposite exit.
             addBranch(from: cells[fork], exit: route[fork].opposite, height: height(fork),
                       seed: id + fork + branches.count, long: id >= 41)
         }
 
-        if id >= 41 {
+        if id >= 30 {
             let primaries = branches
             for (branchIndex, branch) in primaries.enumerated() {
                 let bends = branch.directions.indices.dropFirst().filter {
                     branch.directions[$0 - 1] != branch.directions[$0]
                 }
-                for fork in bends.prefix(id >= 51 ? 2 : 1) {
+                for fork in bends.filter({ fork in id < 40 || fork <= (branch.climbIndex ?? Int.max) }).prefix(id >= 40 ? 2 : 1) {
                     addBranch(from: branch.cells[fork - 1], exit: branch.directions[fork].opposite,
                               height: branch.height(at: fork - 1), seed: id + branchIndex + fork, long: id >= 51)
                 }

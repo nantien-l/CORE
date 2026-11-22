@@ -6,7 +6,6 @@ struct PuzzleBoardLayout: Layout {
     let boardHeight: CGFloat
     let spacing: CGFloat
 
-    private let sidebarWidth: CGFloat = 232
     private let sidebarGap: CGFloat = 30
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -14,7 +13,7 @@ struct PuzzleBoardLayout: Layout {
         if expanded {
             return CGSize(width: width, height: boardHeight)
         }
-        let panelWidth = wide ? sidebarWidth : width
+        let panelWidth = wide ? sidebarWidth(for: width) : width
         let panelHeight = panelSizes(in: subviews, width: panelWidth).reduce(0) { $0 + $1.height } + spacing * 2
         let height = wide ? max(panelHeight, boardHeight) : panelHeight + spacing + boardHeight
         return CGSize(width: width, height: height)
@@ -26,10 +25,11 @@ struct PuzzleBoardLayout: Layout {
             return
         }
 
-        let panelWidth = wide ? sidebarWidth : bounds.width
+        let panelWidth = wide ? sidebarWidth(for: bounds.width) : bounds.width
         let sizes = panelSizes(in: subviews, width: panelWidth)
         let panelHeight = sizes.reduce(0) { $0 + $1.height } + spacing * 2
-        var y = wide ? bounds.midY - panelHeight / 2 : bounds.minY
+        // Keep the sidebar anchored when its controls change from play to results.
+        var y = bounds.minY + (wide ? min(44, max(0, (bounds.height - panelHeight) / 2)) : 0)
 
         for index in 0..<3 {
             if index == 2 && !wide { y += boardHeight + spacing }
@@ -37,10 +37,14 @@ struct PuzzleBoardLayout: Layout {
             y += sizes[index].height + spacing
         }
 
-        let boardOrigin = CGPoint(x: wide ? bounds.minX + sidebarWidth + sidebarGap : bounds.minX,
+        let boardOrigin = CGPoint(x: wide ? bounds.minX + panelWidth + sidebarGap : bounds.minX,
                                   y: wide ? bounds.midY - boardHeight / 2 : bounds.minY + sizes[0].height + sizes[1].height + spacing * 2)
-        let boardWidth = wide ? max(0, bounds.width - sidebarWidth - sidebarGap) : bounds.width
+        let boardWidth = wide ? max(0, bounds.width - panelWidth - sidebarGap) : bounds.width
         subviews[3].place(at: boardOrigin, anchor: .topLeading, proposal: ProposedViewSize(width: boardWidth, height: boardHeight))
+    }
+
+    private func sidebarWidth(for width: CGFloat) -> CGFloat {
+        min(268, max(218, width * 0.235))
     }
 
     private func panelSizes(in subviews: Subviews, width: CGFloat) -> [CGSize] {
